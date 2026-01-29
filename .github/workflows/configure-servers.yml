@@ -1,0 +1,62 @@
+name: Configure servers with Ansible
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ansible:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Install Terraform + Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible unzip
+          # Terraform is usually already available via setup-terraform, but keep it explicit:
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Write SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      - name: Terraform Init (S3 backend)
+        working-directory: terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=week10-taskA/terraform.tfstate" \
+            -backend-config="region=${{ secrets.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}"
+
+      - name: Generate Ansible inventory from Terraform outputs
+        run: |
+          JAVA_IP=$(cd terraform && terraform output -raw java_public_ip)
+          NGINX_IP=$(cd terraform && terraform output -raw nginx_public_ip)
+
+          echo "[java]" > ansible/inventory.ini
+          echo "$JAVA_IP ansible_user=${{ secrets.SSH_USER }} ansible_ssh_private_key_file=~/.ssh/id_rsa" >> ansible/inventory.ini
+
+          echo "" >> ansible/inventory.ini
+          echo "[nginx]" >> ansible/inventory.ini
+          echo "$NGINX_IP ansible_user=${{ secrets.SSH_USER }} ansible_ssh_private_key_file=~/.ssh/id_rsa" >> ansible/inventory.ini
+
+          echo "Inventory created:"
+          cat ansible/inventory.ini
+
+      - name: Run Ansible playbook
+        run: |
+          ansible --version
+          ansible-playbook -c ssh -i ansible/inventory.ini ansible/playbook.yml
