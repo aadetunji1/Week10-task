@@ -1,0 +1,52 @@
+---
+- name: Install JDK on Java node
+  hosts: java
+  become: true
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install JDK
+      apt:
+        name: default-jdk
+        state: present
+
+    - name: Verify Java
+      command: java -version
+      register: java_version
+      changed_when: false
+
+    - name: Print Java version
+      debug:
+        var: java_version.stderr
+
+- name: Install Nginx on Nginx node
+  hosts: nginx
+  become: true
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+
+    - name: Enable and start Nginx
+      service:
+        name: nginx
+        state: started
+        enabled: true
+
+    - name: Verify Nginx
+      command: nginx -v
+      register: nginx_version
+      changed_when: false
+
+    - name: Print Nginx version
+      debug:
+        var: nginx_version.stderr
