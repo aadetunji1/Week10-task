@@ -1,0 +1,13 @@
+variable "aws_region" {
+  type    = string
+  default = "eu-west-1"
+}
+
+variable "key_name" {
+  type = string
+}
+
+variable "instance_type" {
+  type    = string
+  default = "t3.micro"
+}
